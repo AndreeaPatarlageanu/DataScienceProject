@@ -1,0 +1,34 @@
+Project Notes (Martin, 29 Nov):
+
+EDA (renamed from Project.ipynb):
+- Should add code verifying that the parquet file exists to make sure there are no errors
+- For object types, display some sample modalities to show understanding of the dataset.
+- print number of modalities for some categorical features, or a barplot/histogram for checking frequency of each modality.
+- I think 1 hot encoding can still be used for the Page feature. It's not a ridiculously large number of unique modalities.
+- We can also go further potentially into the EDA, maybe plot some statistical graphs that can show which variables corrolates more to the cancellation page than others.
+
+: define churn target column
+
+: Dropping useless columns 
+- firstName & lastName (should be independent to churn)
+- sessionId (arbitrary)
+
+
+---
+
+Roadmap:
+1. Feature engineering:
+- Apply one hot encoding to low dimensionality cat. features
+ 
+2. Model building, evaluating, tuning:
+a. Build baseline model:
+  - Logistic regression
+  - Decision trees
+    - Base decision tree (baseline benchmark)
+    - Ensemble methods: XGBoost, RandomForest, Bagging
+  - Neural Network
+    - Testing around with different architectures of NN
+
+3. Polishing, inference & interpretability
+  - Display model weights, see which features have higher impact on final result.
+  - 
