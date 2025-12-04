@@ -1,17 +1,22 @@
 import pandas as pd
 import numpy as np
 
-def import_and_transform(data: str):
+def import_and_transform(data):
     """
     Import and transform music streaming data for churn prediction.
     
     Args:
-        data: Path to parquet file
+        data: Pandas DataFrame containing raw data, or string containing the path to the data file.
     
     Returns:
         DataFrame with user-level aggregated features
     """
-    df = pd.read_parquet(data)
+    if isinstance(data, str):
+        print("Importing parquet file")
+        df = pd.read_parquet(data)
+    else:
+        print("Using Dataframe")
+        df = data
     
     df = df[df['userId'] != '']
     df['userId'] = df['userId'].astype(int)
@@ -29,7 +34,9 @@ def import_and_transform(data: str):
         lambda x: (x.max() - x.min()).total_seconds()  # Convert to seconds immediately
     )
     df['song_played'] = (df['page'] == 'NextSong').astype(int)
-    
+    return df
+
+def aggregate(data: pd.DataFrame):
     user_df = df.groupby('userId').agg({
         'gender': 'first',
         'registration': 'first',
@@ -67,5 +74,34 @@ def import_and_transform(data: str):
     
         
     user_df = user_df[final_column_order]
-    
+
     return user_df
+
+def evaluate_model(model, test_set, file_out='submission.csv'):
+    '''
+    Evalute the given model and test set and create a submission file for Kaggle.
+    Assumes that the test set has the same columns as the train set used for fitting.
+    Assumes that the user id is used as index of the given set.
+
+    Args:
+        model: classifier model (already fitted) that we would like to test
+        test_set: X_test set from the test parquet file.
+        file_out: Name of the submission file produced.\
+    
+    Returns: 
+        None
+    '''
+    
+    y_pred = model.predict(test_set)
+    user_ids = test_set.index
+    
+    submission = pd.DataFrame({
+        'id': user_ids,
+        'target': y_new_pred
+    })
+    
+    submission.to_csv(f"{file_out}", index=False)
+    print(f"Submission saved to {file_out}")
+    return
+
+    
