@@ -37,7 +37,7 @@ def import_and_transform(data):
     return df
 
 def aggregate(data: pd.DataFrame):
-    user_df = df.groupby('userId').agg({
+    user_df = data.groupby('userId').agg({
         'gender': 'first',
         'registration': 'first',
         'level': lambda x: x.mode().iloc[0] if not x.mode().empty else None,
@@ -97,7 +97,7 @@ def evaluate_model(model, test_set, file_out='submission.csv'):
     
     submission = pd.DataFrame({
         'id': user_ids,
-        'target': y_new_pred
+        'target': y_pred
     })
     
     submission.to_csv(f"{file_out}", index=False)
