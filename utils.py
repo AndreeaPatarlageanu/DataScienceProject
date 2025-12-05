@@ -37,7 +37,7 @@ def import_and_transform(data):
     return df
 
 def aggregate(data: pd.DataFrame):
-    user_df = data.groupby('userId').agg({
+    user_df = df.groupby('userId').agg({
         'gender': 'first',
         'registration': 'first',
         'level': lambda x: x.mode().iloc[0] if not x.mode().empty else None,
@@ -77,7 +77,7 @@ def aggregate(data: pd.DataFrame):
 
     return user_df
 
-def evaluate_model(model, test_set, file_out='submission.csv'):
+def evaluate_model(model, test_set, p=None, file_out='submission.csv'):
     '''
     Evalute the given model and test set and create a submission file for Kaggle.
     Assumes that the test set has the same columns as the train set used for fitting.
@@ -91,16 +91,26 @@ def evaluate_model(model, test_set, file_out='submission.csv'):
     Returns: 
         None
     '''
-    
-    y_pred = model.predict(test_set)
     user_ids = test_set.index
-    
-    submission = pd.DataFrame({
-        'id': user_ids,
-        'target': y_pred
-    })
+    y_pred = model.predict(test_set)
+    print(f"Base predicted churn: {y_pred.mean():.2%}")
+    if p is None:
+        submission = pd.DataFrame({
+            'id': user_ids,
+            'target': y_pred
+        })
+    elif isinstance(p, float) and (0 <= p) and (p <= 1):
+        y_proba = model.predict_proba(test_set)[:, 1]
+        y_pred_adjusted = (y_proba > p).astype(int) 
+        print(f"Predicted churn at {p} threshold: {y_pred_adjusted.mean():.2%}")
+        
+        submission = pd.DataFrame({
+            'id': test_set.index,
+            'target': y_pred_adjusted
+        })
     
     submission.to_csv(f"{file_out}", index=False)
+
     print(f"Submission saved to {file_out}")
     return
 
