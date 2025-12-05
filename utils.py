@@ -114,4 +114,36 @@ def evaluate_model(model, test_set, p=None, file_out='submission.csv'):
     print(f"Submission saved to {file_out}")
     return
 
+def evaluate_model_log_reg(model, test_set, threshold = 0.5, file_out='submission.csv'):
+    '''
+    Evalute the given model and test set and create a submission file for Kaggle.
+    Assumes that the test set has the same columns as the train set used for fitting.
+    Assumes that the user id is used as index of the given set.
+
+    Args:
+        model: classifier model (already fitted) that we would like to test
+        test_set: X_test set from the test parquet file.
+        file_out: Name of the submission file produced.
+    
+    Returns: 
+        None
+    '''
+    
+    y_proba = model.predict_proba(test_set)[:, 1]
+    
+    # Apply custom threshold
+    y_pred = (y_proba >= threshold).astype(int)
+    
+    user_ids = test_set.index
+    
+    submission = pd.DataFrame({
+        'id': user_ids,
+        'target': y_pred
+    })
+    
+    submission.to_csv(f"{file_out}", index=False)
+    print(f"Submission saved to {file_out}")
+    print(f"Predicted churn rate: {y_pred.mean():.2%}")
+    return
+
     
