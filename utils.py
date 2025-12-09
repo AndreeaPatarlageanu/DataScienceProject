@@ -1,47 +1,50 @@
 import pandas as pd
 import numpy as np
 
+###################################################################
+
 def import_and_transform(data):
-    """
-    Import and transform music streaming data for churn prediction.
+
+    # ROLE OF THIS FUNCTION:
+    # Loads and cleans raw event level streaming data: standardizes data types, 
+    # encodes categorical variables, and makes some basic feature engineering
     
-    Args:
-        data: Pandas DataFrame containing raw data, or string containing the path to the data file.
-    
-    Returns:
-        DataFrame with user-level aggregated features
-    """
     if isinstance(data, str):
         df = pd.read_parquet(data)
     else:
         df = data
     
+    # We delete the rows with missing user ids, and convert the ids to integers::
     df = df[df['userId'] != '']
     df['userId'] = df['userId'].astype(int)
+
+    # For ML models, we need to encode our categorical variables into
+    # numerical values. Binary for gender and level of membership:
     df["gender"] = df["gender"].map({'F': 0, 'M': 1})
     df["level"] = df["level"].map({'free': 0, 'paid': 1})
+
+    # Convert timestamps to datetime objects:
     df['ts'] = pd.to_datetime(df['ts'], unit='ms')
     df['registration'] = pd.to_datetime(df['registration'])
     
+    # FEATURE ENGINEERING:
+    # We create a 'session length' feture = duration of each session in seconds
     df['session_length'] = df.groupby(['userId', 'sessionId'])['ts'].transform(
         lambda x: (x.max() - x.min()).total_seconds()
     )
+    # 'NextSong' page indicates a song was played
     df['song_played'] = (df['page'] == 'NextSong').astype(int)
     
     return df
 
+#######################################################################
+
 def get_churned_users(df, start_date, end_date):
-    """
-    Given a dataframe and observation window, get a list of all unique churned users.
-    
-    Args:
-        df: DataFrame containing user actions information.
-        start_date: Datetime format.
-        end_date: Datetime format.
-    
-    Returns:
-        Set containing userIds of all churned users within observation window.
-    """
+
+    # ROLE OF THIS FUNCTION:
+    # Identifies the users that cancelled their subscription
+    # in a given time period
+
     # Convert the given dates to timestamps
     start = pd.Timestamp(start_date)
     end = pd.Timestamp(end_date)
@@ -55,75 +58,22 @@ def get_churned_users(df, start_date, end_date):
     # Return as a set
     return set(churned)
 
-def aggregate(data: pd.DataFrame):
-    """
-    Simple aggregation by userId function. 
-    Only does elementary aggregations, used for EDA purposes,
-    Achieves rather poor accuracy when trying on the test set.
-    
-    Args: 
-        data: DataFrame containing user information. 
-
-    Returns:
-        DataFrame with aggregated userId features.
-    """
-    user_df = df.groupby('userId').agg({
-        'gender': 'first',
-        'registration': 'first',
-        'level': lambda x: x.mode().iloc[0] if not x.mode().empty else None,
-        'sessionId': 'nunique',
-        'itemInSession': 'max',
-        'ts': ['min', 'max'],
-        'session_length': 'mean',
-        'song_played': 'sum',
-        'artist': pd.Series.nunique,
-        'length': 'sum',
-        'churned': 'max'    
-    }).reset_index()
-    
-    user_df.columns = ['userId', 'gender', 'registration', 'level',
-                       'num_sessions', 'max_item_in_session', 'ts_min', 'ts_max', 
-                       'avg_session_length_seconds',  # Renamed for clarity
-                       'num_songs_played', 'unique_artists', 'total_length', 'churned']
-    
-    user_df['days_active'] = (user_df['ts_max'] - user_df['ts_min']).dt.days
-    user_df['membership_length'] = (user_df['ts_max'] - user_df['registration']).dt.days
-    
-    user_df = user_df.fillna(0)
-    
-    print(f"Processed {len(user_df)} users")
-    print(f"Churn rate: {user_df['churned'].mean():.2%}")
-
-    final_column_order = [
-            'userId', 'gender', 'registration', 'level',
-            'num_sessions', 'max_item_in_session', 'ts_min', 'ts_max',
-            'avg_session_length_seconds', 'num_songs_played',
-            'unique_artists', 'total_length', 'days_active',
-            'membership_length', 'churned'
-        ]
-    
-    user_df = user_df[final_column_order]
-
-    return user_df
+#########################################################################
 
 def aggregate_features_improved(data, observation_end):
-    """
-    Improved aggregation function.
+    
+    # ROLE OF THIS FUNCTION:
+    # This function transforms the even level data into user level features
+    # such that it contains activity patterns, engagement, temporal trends, and overall behavioural
+    # signals that can be useful for churn modelling.
 
-    Args:
-        data: dataframe containing features.
-        observation_end: DateTime format.
-
-    Returns:
-        DataFrame with aggregated userId features.
-    """
     observation_end = pd.Timestamp(observation_end)
     
-    # Time windows
+    # We have 2 time windows for the recent activity
     last_7_days = observation_end - pd.Timedelta(days=7)
     last_30_days = observation_end - pd.Timedelta(days=30)
     
-    # Base aggregation
+    # We perform some basic aggregation first
     user_df = data.groupby("userId").agg({
         "gender": "first",
         "registration": "first",
@@ -137,7 +87,7 @@ def aggregate_features_improved(data, observation_end):
         "length": ["sum", "mean"],
     }).reset_index()
     
-    # Flatten columns
+    # Organize columns
     user_df.columns = [
         "userId", "gender", "registration", 
         "level_first", "level_current",
@@ -147,7 +97,7 @@ def aggregate_features_improved(data, observation_end):
         "total_length", "avg_song_length"
     ]
     
-    # Time-based features
+    # Some feature engineering based on time:
     user_df["days_active"] = (observation_end - user_df["ts_min"]).dt.days
     user_df["membership_length"] = (observation_end - user_df["registration"]).dt.days
     user_df["days_since_last_activity"] = (observation_end - user_df["ts_max"]).dt.days
@@ -179,9 +129,6 @@ def aggregate_features_improved(data, observation_end):
         (user_df["level_first"] == 1) & (user_df["level_current"] == 0)
     ).astype(int)
     
-    # ========================================
-    # PAGE-SPECIFIC FEATURES (Fix here!)
-    # ========================================
     
     # Create a helper function to count pages
     def count_page(df, page_name, column_name):
@@ -278,16 +225,12 @@ def aggregate_features_improved(data, observation_end):
     return user_df
 
 def aggregate_features_improved2(data, observation_end):
-    """
-    Even more improved aggregation function.
+    
+    # ROLE OF THIS FUNCTION:
+    # This function extends basic aggregation with some sophisticated temporal trend 
+    # analysis, recency weighting, behavioral change detection, and some composite risk 
+    # scoring to capture more detailed churn signals
 
-    Args:
-        data: dataframe containing features.
-        observation_end: DateTime format.
-
-    Returns:
-        DataFrame with aggregated userId features.
-    """
     observation_end = pd.Timestamp(observation_end)
     
     # Time windows
@@ -596,19 +539,11 @@ def aggregate_features_improved2(data, observation_end):
 
 
 def evaluate_model(model, test_set, p=None, file_out='submission.csv'):
-    '''
-    Evalute the given model and test set and create a submission file for Kaggle.
-    Assumes that the test set has the same columns as the train set used for fitting.
-    Assumes that the user id is used as index of the given set.
-
-    Args:
-        model: classifier model (already fitted) that we would like to test
-        test_set: X_test set from the test parquet file.
-        file_out: Name of the submission file produced.\
     
-    Returns: 
-        None
-    '''
+    # ROLE OF THIS FUNCTION:
+    # This function simply evaluates the model on the test set
+    # and then saves the submission file.
+
     user_ids = test_set.index
     y_pred = model.predict(test_set)
     print(f"Base predicted churn: {y_pred.mean():.2%}")
