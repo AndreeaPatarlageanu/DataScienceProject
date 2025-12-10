@@ -102,7 +102,7 @@ def aggregate_features_improved(data, observation_end):
     user_df["membership_length"] = (observation_end - user_df["registration"]).dt.days
     user_df["days_since_last_activity"] = (observation_end - user_df["ts_max"]).dt.days
     
-    # Recent activity
+    # We save information regarding recent activity, last 7 days:
     recent = data[data["ts"] >= last_7_days]
     recent_counts = recent.groupby("userId").agg({
         "song_played": "sum",
@@ -113,29 +113,29 @@ def aggregate_features_improved(data, observation_end):
     })
     user_df = user_df.merge(recent_counts, on="userId", how="left")
     
-    # Trend features
+    # We want to inspect some temporal trends, thus we create:
     user_df["songs_per_day_overall"] = user_df["num_songs_played"] / (user_df["days_active"] + 1)
     user_df["songs_per_day_recent"] = user_df["songs_last_7_days"] / 7
     user_df["activity_decline"] = (
         user_df["songs_per_day_recent"] / (user_df["songs_per_day_overall"] + 1)
     )
     
-    # Engagement depth
+    # Even more engagement depth features:
     user_df["songs_per_session"] = user_df["num_songs_played"] / (user_df["num_sessions"] + 1)
     user_df["artist_diversity"] = user_df["unique_artists"] / (user_df["num_songs_played"] + 1)
     
-    # Subscription behavior
+    # It is very important to track the subscription behaviour:
     user_df["downgraded"] = (
         (user_df["level_first"] == 1) & (user_df["level_current"] == 0)
     ).astype(int)
     
     
-    # Create a helper function to count pages
+    # We want to see how many times each of the users visited specific pages:
     def count_page(df, page_name, column_name):
         counts = df[df["page"] == page_name].groupby("userId").size()
         return counts.rename(column_name)
     
-    # Count all page types
+    # Now we count all the page types which are interesting for us:
     page_counts = pd.DataFrame({
         "friends_added": count_page(data, "Add Friend", "friends_added"),
         "thumbs_up_count": count_page(data, "Thumbs Up", "thumbs_up_count"),
@@ -151,10 +151,10 @@ def aggregate_features_improved(data, observation_end):
         "ad_count": count_page(data, "Roll Advert", "ad_count"),
     }).reset_index()
     
-    # Merge page counts to user_df
+    # We merge these page counts into our dataframe
     user_df = user_df.merge(page_counts, on="userId", how="left")
     
-    # Downgrade/upgrade attempts (multiple pages)
+    # Let's see if the user attempted to downgrade or upgrade
     downgrade_counts = (
         data[data["page"].isin(["Downgrade", "Submit Downgrade"])]
         .groupby("userId").size().rename("downgrade_attempts")
@@ -164,34 +164,33 @@ def aggregate_features_improved(data, observation_end):
         .groupby("userId").size().rename("upgrade_attempts")
     )
     
+    # Merge these counts as well
     user_df = user_df.merge(downgrade_counts, on="userId", how="left")
     user_df = user_df.merge(upgrade_counts, on="userId", how="left")
     
-    # Total page views for actions_per_session
+    # We ocunt the total page views per user
     total_views = data.groupby("userId").size().rename("total_page_views")
     user_df = user_df.merge(total_views, on="userId", how="left")
     
-    # ========================================
-    # DERIVED FEATURES (after merging)
-    # ========================================
+    # After merging, we can create some more features:
     
-    # Social engagement
+    # Did he add any friends? It is a clear sign of social engagement:
     user_df["has_social_activity"] = (user_df["friends_added"] > 0).astype(int)
     
-    # Positive actions
+    # We want to consider these as positive actions that indicate engagement:
     user_df["positive_actions"] = (
         user_df["thumbs_up_count"] + 
         user_df["playlists_created"] + 
         user_df["friends_added"]
     )
     
-    # Satisfaction ratio
+    # Let's compute satisfaction as the ratio of thumbs up to total feedback:
     user_df["satisfaction_ratio"] = (
         user_df["thumbs_up_count"] / 
         (user_df["thumbs_down_count"] + user_df["thumbs_up_count"] + 1)
     )
     
-    # Engagement rate
+    # Same for the engagement rate:
     total_actions = (
         user_df["positive_actions"] + 
         user_df["thumbs_down_count"] + 
@@ -201,28 +200,30 @@ def aggregate_features_improved(data, observation_end):
         total_actions / (user_df["num_songs_played"] + 1)
     )
     
-    # Problem signals
+    # Let's see how many problem the user had:
     user_df["problem_signals"] = (
         user_df["help_visits"] + 
         user_df["error_count"] + 
         user_df["settings_visits"]
     )
     
-    # Ad metrics
+    # Ads per song ratio:
     user_df["ads_per_song"] = (
         user_df["ad_count"] / (user_df["num_songs_played"] + 1)
     )
     
-    # Actions per session
+    # Let's see how many actions per session the user does:
     user_df["actions_per_session"] = (
         user_df["total_page_views"] / (user_df["num_sessions"] + 1)
     )
     
-    # Fill NaN with 0 (for users without certain activities)
+    # For any missing vals, we just fill with 0s:
     user_df = user_df.fillna(0)
     user_df.set_index("userId", inplace=True)
     
     return user_df
+
+########################################################################
 
 def aggregate_features_improved2(data, observation_end):
     
