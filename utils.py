@@ -538,6 +538,7 @@ def aggregate_features_improved2(data, observation_end):
     
     return user_df
 
+#######################################################################
 
 def evaluate_model(model, test_set, p=None, file_out='submission.csv'):
     
@@ -567,3 +568,6 @@ def evaluate_model(model, test_set, p=None, file_out='submission.csv'):
 
     print(f"Submission saved to {file_out}")
     return
+
+#######################################################################
+
